@@ -1,14 +1,13 @@
 const MULT_MIN = 3;
 const MULT_MAX = 12;
-const FRACTION_DENOM_MIN = 5;
-const FRACTION_DENOM_MAX = 8;
+const FRACTION_DENOMS = [5, 6, 8];
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 function randomFraction() {
-  const denom = randInt(FRACTION_DENOM_MIN, FRACTION_DENOM_MAX);
+  const denom = FRACTION_DENOMS[randInt(0, FRACTION_DENOMS.length - 1)];
   const numer = randInt(1, denom - 1);
   return { numer, denom };
 }
