@@ -34,6 +34,25 @@
         </select>
       </label>
 
+      <div class="field" id="mult-range-field">
+        <span>Multiplication factors</span>
+        <div class="range-inputs">
+          <input type="number" id="mult-min" value="3" min="1" max="20" />
+          <span class="range-sep">to</span>
+          <input type="number" id="mult-max" value="12" min="1" max="20" />
+        </div>
+      </div>
+
+      <div class="field" id="fraction-range-field">
+        <span>Fraction denominators</span>
+        <div class="range-inputs">
+          <input type="number" id="denom-min" value="5" min="2" max="20" />
+          <span class="range-sep">to</span>
+          <input type="number" id="denom-max" value="8" min="2" max="20" />
+        </div>
+        <input type="text" id="denom-exclude" value="7" placeholder="exclude, e.g. 7" />
+      </div>
+
       <button id="start-btn" class="btn">Start</button>
     </section>
 

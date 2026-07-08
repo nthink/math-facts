@@ -65,13 +65,37 @@ h1 {
   color: var(--muted);
 }
 
-select {
+.field.hidden {
+  display: none;
+}
+
+select,
+.field input[type="number"],
+.field input[type="text"] {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #2c2f38;
   background: var(--card);
   color: var(--text);
   font-size: 1rem;
+  width: 100%;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-inputs input[type="number"] {
+  width: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.range-sep {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .btn {

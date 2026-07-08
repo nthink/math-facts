@@ -1,15 +1,34 @@
-const MULT_MIN = 3;
-const MULT_MAX = 12;
-const FRACTION_DENOMS = [5, 6, 8];
+// Populated from the start screen's range/exclude inputs in startQuiz().
+let multMin = 3;
+let multMax = 12;
+let fractionDenoms = [5, 6, 8];
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 function randomFraction() {
-  const denom = FRACTION_DENOMS[randInt(0, FRACTION_DENOMS.length - 1)];
+  const denom = fractionDenoms[randInt(0, fractionDenoms.length - 1)];
   const numer = randInt(1, denom - 1);
   return { numer, denom };
+}
+
+// Parses a comma/space separated list of numbers, e.g. "7, 9" -> Set{7,9}.
+function parseExcludeList(text) {
+  return new Set(
+    text
+      .split(/[\s,]+/)
+      .map((part) => Number(part))
+      .filter((n) => !Number.isNaN(n))
+  );
+}
+
+function buildRange(min, max, exclude) {
+  const values = [];
+  for (let n = min; n <= max; n++) {
+    if (!exclude.has(n)) values.push(n);
+  }
+  return values;
 }
 
 function fractionToDecimalString(numer, denom) {
@@ -21,8 +40,8 @@ function fractionToDecimalString(numer, denom) {
 // exact string the user must type; comparison is plain string equality.
 const problemTypes = {
   multiplication() {
-    const a = randInt(MULT_MIN, MULT_MAX);
-    const b = randInt(MULT_MIN, MULT_MAX);
+    const a = randInt(multMin, multMax);
+    const b = randInt(multMin, multMax);
     return { prompt: `${a} × ${b}`, answer: String(a * b), hint: "" };
   },
   fractionToDecimal() {
@@ -62,6 +81,13 @@ const resultsScreen = document.getElementById("results-screen");
 
 const categorySelect = document.getElementById("category");
 const timeLimitSelect = document.getElementById("time-limit");
+const multRangeField = document.getElementById("mult-range-field");
+const multMinInput = document.getElementById("mult-min");
+const multMaxInput = document.getElementById("mult-max");
+const fractionRangeField = document.getElementById("fraction-range-field");
+const denomMinInput = document.getElementById("denom-min");
+const denomMaxInput = document.getElementById("denom-max");
+const denomExcludeInput = document.getElementById("denom-exclude");
 const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
 
@@ -95,7 +121,43 @@ function showScreen(screen) {
   }
 }
 
+function updateRangeFieldVisibility() {
+  const selected = categorySelect.value;
+  multRangeField.classList.toggle(
+    "hidden",
+    selected !== "multiplication" && selected !== "mixed"
+  );
+  fractionRangeField.classList.toggle(
+    "hidden",
+    selected !== "fractionToDecimal" && selected !== "decimalToFraction" && selected !== "mixed"
+  );
+}
+
 function startQuiz() {
+  const newMultMin = Number(multMinInput.value);
+  const newMultMax = Number(multMaxInput.value);
+  const newDenomMin = Number(denomMinInput.value);
+  const newDenomMax = Number(denomMaxInput.value);
+  const exclude = parseExcludeList(denomExcludeInput.value);
+  const newFractionDenoms = buildRange(newDenomMin, newDenomMax, exclude);
+
+  if (!newMultMin || !newMultMax || newMultMin > newMultMax) {
+    alert("Enter a valid multiplication range (min at or below max).");
+    return;
+  }
+  if (!newDenomMin || !newDenomMax || newDenomMin > newDenomMax) {
+    alert("Enter a valid denominator range (min at or below max).");
+    return;
+  }
+  if (newFractionDenoms.length === 0) {
+    alert("The denominator range excludes every value in it — widen the range or the exclude list.");
+    return;
+  }
+
+  multMin = newMultMin;
+  multMax = newMultMax;
+  fractionDenoms = newFractionDenoms;
+
   category = categorySelect.value;
   const minutes = Number(timeLimitSelect.value);
   correctCount = 0;
@@ -185,3 +247,5 @@ function finishQuiz() {
 startBtn.addEventListener("click", startQuiz);
 retryBtn.addEventListener("click", () => showScreen(startScreen));
 answerInput.addEventListener("input", handleInput);
+categorySelect.addEventListener("change", updateRangeFieldVisibility);
+updateRangeFieldVisibility();
