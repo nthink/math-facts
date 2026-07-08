@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Facts</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <!-- Start screen -->
+    <section id="start-screen" class="screen">
+      <h1>Math Facts</h1>
+      <p class="subtitle">Multiplication, 1&ndash;12</p>
+
+      <label class="field">
+        <span>Number of problems</span>
+        <select id="problem-count">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+
+      <button id="start-btn" class="btn">Start</button>
+    </section>
+
+    <!-- Quiz screen -->
+    <section id="quiz-screen" class="screen hidden">
+      <div class="hud">
+        <span id="timer" class="timer">0:00.0</span>
+        <span id="progress" class="progress">1 / 20</span>
+      </div>
+
+      <div id="problem-card" class="problem-card">
+        <div id="problem" class="problem"></div>
+        <form id="answer-form" autocomplete="off">
+          <input
+            id="answer-input"
+            type="text"
+            inputmode="numeric"
+            pattern="-?[0-9]*"
+            autocomplete="off"
+            placeholder="?"
+          />
+        </form>
+        <div id="feedback" class="feedback" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- Results screen -->
+    <section id="results-screen" class="screen hidden">
+      <h1>Done!</h1>
+      <div class="results">
+        <div class="result-row">
+          <span class="result-label">Total time</span>
+          <span id="result-time" class="result-value"></span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Missed</span>
+          <span id="result-missed" class="result-value"></span>
+        </div>
+      </div>
+      <button id="retry-btn" class="btn">Play Again</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
