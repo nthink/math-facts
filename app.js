@@ -122,6 +122,22 @@ function tick() {
   timerEl.textContent = formatCountdown(remaining);
 }
 
+// Fraction answers ("3/5") must match exactly. Numeric answers (ints and
+// decimals) compare by value, so a leading zero can be omitted (".333"
+// is accepted for "0.333").
+function isCorrectAnswer(trimmed, answer) {
+  if (answer.includes("/")) return trimmed === answer;
+  if (trimmed === "") return false;
+  const n = Number(trimmed);
+  return !Number.isNaN(n) && n === Number(answer);
+}
+
+// Minimum characters expected before we're willing to flag an answer as
+// wrong, accounting for a possibly-omitted leading zero on decimals.
+function minAnswerLength(answer) {
+  return answer.startsWith("0.") ? answer.length - 1 : answer.length;
+}
+
 function nextProblem() {
   currentProblem = generateProblem(category);
   currentProblem.missed = false;
@@ -136,7 +152,7 @@ function handleInput() {
   if (!quizActive) return;
   const trimmed = answerInput.value.trim();
 
-  if (trimmed === currentProblem.answer) {
+  if (isCorrectAnswer(trimmed, currentProblem.answer)) {
     correctCount += 1;
     correctCountEl.textContent = String(correctCount);
     answerInput.classList.remove("incorrect");
@@ -147,7 +163,7 @@ function handleInput() {
     return;
   }
 
-  if (trimmed !== "" && trimmed.length >= currentProblem.answer.length) {
+  if (trimmed !== "" && trimmed.length >= minAnswerLength(currentProblem.answer)) {
     if (!currentProblem.missed) {
       currentProblem.missed = true;
       missedCount += 1;
