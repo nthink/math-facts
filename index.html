@@ -11,15 +11,26 @@
     <!-- Start screen -->
     <section id="start-screen" class="screen">
       <h1>Math Facts</h1>
-      <p class="subtitle">Multiplication, 1&ndash;12</p>
+      <p class="subtitle">Beat the clock</p>
 
       <label class="field">
-        <span>Number of problems</span>
-        <select id="problem-count">
-          <option value="10">10</option>
-          <option value="20" selected>20</option>
-          <option value="30">30</option>
-          <option value="50">50</option>
+        <span>Category</span>
+        <select id="category">
+          <option value="multiplication" selected>Multiplication</option>
+          <option value="fractionToDecimal">Fraction &rarr; Decimal</option>
+          <option value="decimalToFraction">Decimal &rarr; Fraction</option>
+          <option value="mixed">Mixed</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Time limit</span>
+        <select id="time-limit">
+          <option value="1">1 minute</option>
+          <option value="2" selected>2 minutes</option>
+          <option value="3">3 minutes</option>
+          <option value="5">5 minutes</option>
+          <option value="10">10 minutes</option>
         </select>
       </label>
 
@@ -29,33 +40,30 @@
     <!-- Quiz screen -->
     <section id="quiz-screen" class="screen hidden">
       <div class="hud">
-        <span id="timer" class="timer">0:00.0</span>
-        <span id="progress" class="progress">1 / 20</span>
+        <span id="timer" class="timer">2:00</span>
+        <span class="correct-label">Correct: <span id="correct-count">0</span></span>
       </div>
 
-      <div id="problem-card" class="problem-card">
+      <div class="problem-card">
         <div id="problem" class="problem"></div>
-        <form id="answer-form" autocomplete="off">
-          <input
-            id="answer-input"
-            type="text"
-            inputmode="numeric"
-            pattern="-?[0-9]*"
-            autocomplete="off"
-            placeholder="?"
-          />
-        </form>
-        <div id="feedback" class="feedback" aria-live="polite"></div>
+        <input
+          id="answer-input"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          placeholder="?"
+        />
+        <div id="hint" class="hint"></div>
       </div>
     </section>
 
     <!-- Results screen -->
     <section id="results-screen" class="screen hidden">
-      <h1>Done!</h1>
+      <h1>Time's up!</h1>
       <div class="results">
         <div class="result-row">
-          <span class="result-label">Total time</span>
-          <span id="result-time" class="result-value"></span>
+          <span class="result-label">Correct</span>
+          <span id="result-correct" class="result-value"></span>
         </div>
         <div class="result-row">
           <span class="result-label">Missed</span>

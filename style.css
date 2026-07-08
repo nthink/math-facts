@@ -108,6 +108,15 @@ select {
   color: var(--text);
 }
 
+.correct-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.correct-label #correct-count {
+  color: var(--good);
+  font-weight: 700;
+}
+
 .problem-card {
   width: 100%;
   background: var(--card);
@@ -125,14 +134,8 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-#answer-form {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
 #answer-input {
-  width: 140px;
+  width: 160px;
   padding: 14px;
   font-size: 2rem;
   text-align: center;
@@ -165,18 +168,10 @@ select {
   75% { transform: translateX(6px); }
 }
 
-.feedback {
+.hint {
   min-height: 1.2em;
-  font-weight: 600;
-  font-size: 1rem;
-}
-
-.feedback.correct {
-  color: var(--good);
-}
-
-.feedback.incorrect {
-  color: var(--bad);
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 .results {

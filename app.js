@@ -1,48 +1,93 @@
-// Problem generators, keyed by type. Multiplication for now;
-// division / fraction-to-decimal can be added the same way later.
-const generators = {
+const MULT_MIN = 3;
+const MULT_MAX = 12;
+const FRACTION_DENOM_MIN = 5;
+const FRACTION_DENOM_MAX = 8;
+
+function randInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function randomFraction() {
+  const denom = randInt(FRACTION_DENOM_MIN, FRACTION_DENOM_MAX);
+  const numer = randInt(1, denom - 1);
+  return { numer, denom };
+}
+
+function fractionToDecimalString(numer, denom) {
+  const rounded = Math.round((numer / denom) * 1000) / 1000;
+  return String(rounded);
+}
+
+// Each generator returns { prompt, answer, hint }. `answer` is always the
+// exact string the user must type; comparison is plain string equality.
+const problemTypes = {
   multiplication() {
-    const a = 1 + Math.floor(Math.random() * 12);
-    const b = 1 + Math.floor(Math.random() * 12);
-    return { text: `${a} × ${b}`, answer: a * b };
+    const a = randInt(MULT_MIN, MULT_MAX);
+    const b = randInt(MULT_MIN, MULT_MAX);
+    return { prompt: `${a} × ${b}`, answer: String(a * b), hint: "" };
+  },
+  fractionToDecimal() {
+    const { numer, denom } = randomFraction();
+    return {
+      prompt: `${numer}/${denom}`,
+      answer: fractionToDecimalString(numer, denom),
+      hint: "as a decimal",
+    };
+  },
+  decimalToFraction() {
+    const { numer, denom } = randomFraction();
+    return {
+      prompt: fractionToDecimalString(numer, denom),
+      answer: `${numer}/${denom}`,
+      hint: "as a fraction, e.g. 3/5",
+    };
   },
 };
 
-function generateProblems(count, type = "multiplication") {
-  const generate = generators[type];
-  return Array.from({ length: count }, () => generate());
+const categoryTypes = {
+  multiplication: ["multiplication"],
+  fractionToDecimal: ["fractionToDecimal"],
+  decimalToFraction: ["decimalToFraction"],
+  mixed: ["multiplication", "fractionToDecimal", "decimalToFraction"],
+};
+
+function generateProblem(category) {
+  const types = categoryTypes[category];
+  const type = types[randInt(0, types.length - 1)];
+  return problemTypes[type]();
 }
 
 const startScreen = document.getElementById("start-screen");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
 
-const problemCountSelect = document.getElementById("problem-count");
+const categorySelect = document.getElementById("category");
+const timeLimitSelect = document.getElementById("time-limit");
 const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
 
 const timerEl = document.getElementById("timer");
-const progressEl = document.getElementById("progress");
+const correctCountEl = document.getElementById("correct-count");
 const problemEl = document.getElementById("problem");
-const answerForm = document.getElementById("answer-form");
+const hintEl = document.getElementById("hint");
 const answerInput = document.getElementById("answer-input");
-const feedbackEl = document.getElementById("feedback");
 
-const resultTimeEl = document.getElementById("result-time");
+const resultCorrectEl = document.getElementById("result-correct");
 const resultMissedEl = document.getElementById("result-missed");
 
-let problems = [];
-let currentIndex = 0;
-let missedProblems = new Set();
-let startTime = 0;
+let category = "multiplication";
+let currentProblem = null;
+let correctCount = 0;
+let missedCount = 0;
+let quizActive = false;
+let deadline = 0;
 let timerHandle = null;
 
-function formatTime(ms) {
-  const totalTenths = Math.floor(ms / 100);
-  const minutes = Math.floor(totalTenths / 600);
-  const seconds = Math.floor((totalTenths % 600) / 10);
-  const tenths = totalTenths % 10;
-  return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths}`;
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function showScreen(screen) {
@@ -51,89 +96,77 @@ function showScreen(screen) {
   }
 }
 
-function startTimer() {
-  startTime = performance.now();
-  timerHandle = setInterval(() => {
-    timerEl.textContent = formatTime(performance.now() - startTime);
-  }, 100);
-}
-
-function stopTimer() {
-  clearInterval(timerHandle);
-  timerHandle = null;
-  return performance.now() - startTime;
-}
-
 function startQuiz() {
-  const count = Number(problemCountSelect.value);
-  problems = generateProblems(count);
-  currentIndex = 0;
-  missedProblems = new Set();
+  category = categorySelect.value;
+  const minutes = Number(timeLimitSelect.value);
+  correctCount = 0;
+  missedCount = 0;
+  quizActive = true;
 
-  timerEl.textContent = "0:00.0";
+  correctCountEl.textContent = "0";
   showScreen(quizScreen);
-  showProblem();
-  startTimer();
+  nextProblem();
+
+  deadline = performance.now() + minutes * 60000;
+  timerEl.textContent = formatCountdown(minutes * 60000);
+  timerHandle = setInterval(tick, 100);
 }
 
-function showProblem() {
-  const problem = problems[currentIndex];
-  problemEl.textContent = `${problem.text} =`;
-  progressEl.textContent = `${currentIndex + 1} / ${problems.length}`;
-  feedbackEl.textContent = "";
-  feedbackEl.className = "feedback";
+function tick() {
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) {
+    timerEl.textContent = "0:00";
+    finishQuiz();
+    return;
+  }
+  timerEl.textContent = formatCountdown(remaining);
+}
+
+function nextProblem() {
+  currentProblem = generateProblem(category);
+  currentProblem.missed = false;
+  problemEl.textContent = currentProblem.prompt;
+  hintEl.textContent = currentProblem.hint;
   answerInput.value = "";
   answerInput.className = "";
   answerInput.focus();
 }
 
-function handleSubmit(event) {
-  event.preventDefault();
-  if (answerInput.value.trim() === "") return;
+function handleInput() {
+  if (!quizActive) return;
+  const trimmed = answerInput.value.trim();
 
-  const submitted = Number(answerInput.value);
-  const problem = problems[currentIndex];
-
-  if (submitted === problem.answer) {
+  if (trimmed === currentProblem.answer) {
+    correctCount += 1;
+    correctCountEl.textContent = String(correctCount);
     answerInput.classList.remove("incorrect");
     answerInput.classList.add("correct");
-    feedbackEl.textContent = "Correct!";
-    feedbackEl.className = "feedback correct";
-
     setTimeout(() => {
-      currentIndex += 1;
-      if (currentIndex < problems.length) {
-        showProblem();
-      } else {
-        finishQuiz();
-      }
-    }, 300);
-  } else {
-    missedProblems.add(currentIndex);
-    answerInput.classList.remove("correct");
+      if (quizActive) nextProblem();
+    }, 120);
+    return;
+  }
+
+  if (trimmed !== "" && trimmed.length >= currentProblem.answer.length) {
+    if (!currentProblem.missed) {
+      currentProblem.missed = true;
+      missedCount += 1;
+    }
     answerInput.classList.add("incorrect");
-    feedbackEl.textContent = "Try again";
-    feedbackEl.className = "feedback incorrect";
-    answerInput.select();
+  } else {
+    answerInput.classList.remove("incorrect");
   }
 }
 
 function finishQuiz() {
-  const elapsed = stopTimer();
-  resultTimeEl.textContent = formatTime(elapsed);
-  resultMissedEl.textContent = `${missedProblems.size} / ${problems.length}`;
+  quizActive = false;
+  clearInterval(timerHandle);
+  answerInput.blur();
+  resultCorrectEl.textContent = String(correctCount);
+  resultMissedEl.textContent = String(missedCount);
   showScreen(resultsScreen);
 }
 
 startBtn.addEventListener("click", startQuiz);
 retryBtn.addEventListener("click", () => showScreen(startScreen));
-answerForm.addEventListener("submit", handleSubmit);
-
-// Clear the incorrect state as soon as the user starts typing a new guess.
-answerInput.addEventListener("input", () => {
-  if (answerInput.classList.contains("incorrect")) {
-    answerInput.classList.remove("incorrect");
-    feedbackEl.textContent = "";
-    feedbackEl.className = "feedback";
-  }
-});
+answerInput.addEventListener("input", handleInput);
