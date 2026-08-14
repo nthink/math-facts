@@ -10,6 +10,7 @@ let fractionDenoms = [5, 6, 8];
 const BENCHMARKS_KEY = "mathFacts.benchmarks";
 const BESTS_KEY = "mathFacts.bests";
 const HISTORY_KEY = "mathFacts.history";
+const SCORES_KEY = "mathFacts.scores";
 const MAX_HISTORY = 200;
 const DEFAULT_BENCHMARKS = {
   multiplication: 30,
@@ -59,18 +60,75 @@ function bestKey(cat, minutes) {
   return `${cat}:${minutes}`;
 }
 
-function loadHistory() {
+// Overall Score: a persistent per-category rating that blends speed and
+// accuracy, distinct from "personal best" (which is just a single high
+// score at one time limit). Each session's quality score folds into a
+// running average — one bad or lucky run barely moves it, but consistent
+// improvement over many sessions does. Because it's rate-based
+// (correct/minute), it's comparable across different time limits too.
+const SCORE_EMA_ALPHA = 0.3;
+
+function loadScores() {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    return JSON.parse(localStorage.getItem(SCORES_KEY)) || {};
   } catch {
-    return [];
+    return {};
   }
+}
+
+function computeSessionScore({ correct, missed, helped, minutes }) {
+  const totalProblems = correct + helped;
+  if (totalProblems === 0 || minutes <= 0) return 0;
+  const accuracy = correct / totalProblems;
+  const cleanliness = 1 - (missed / totalProblems) * 0.5;
+  const speed = correct / minutes;
+  return speed * accuracy * cleanliness;
+}
+
+// Folds a session's score into the category's running average and
+// persists it. Returns the updated overall score.
+function updateOverallScore(cat, sessionScore) {
+  const scores = loadScores();
+  const previous = scores[cat];
+  const updated = previous == null ? sessionScore : SCORE_EMA_ALPHA * sessionScore + (1 - SCORE_EMA_ALPHA) * previous;
+  scores[cat] = updated;
+  localStorage.setItem(SCORES_KEY, JSON.stringify(scores));
+  return updated;
+}
+
+function makeHistoryId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function loadHistory() {
+  let history;
+  try {
+    history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+  } catch {
+    history = [];
+  }
+  // Entries saved before per-entry deletion was added have no id — assign
+  // one now so deletion works on old data too.
+  let migrated = false;
+  for (const entry of history) {
+    if (!entry.id) {
+      entry.id = makeHistoryId();
+      migrated = true;
+    }
+  }
+  if (migrated) localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  return history;
 }
 
 function logHistoryEntry(entry) {
   const history = loadHistory();
-  history.push(entry);
+  history.push({ id: makeHistoryId(), ...entry });
   if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function deleteHistoryEntry(id) {
+  const history = loadHistory().filter((h) => h.id !== id);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
@@ -99,15 +157,17 @@ function computeDayStreak(history) {
   return streak;
 }
 
-// Ratios are fixed fractions of the benchmark, so tick positions on the
-// tier-progress bar (see updateTierProgress) can be hardcoded percentages.
 const RANK_TIERS = [
   { tier: "aura", label: "Aura", emoji: "✨", ratio: 1.3 },
   { tier: "sigma", label: "Sigma", emoji: "🗿", ratio: 1.0 },
   { tier: "mid", label: "Mid", emoji: "😐", ratio: 0.75 },
   { tier: "newb", label: "Newb", emoji: "🌱", ratio: 0.5 },
 ];
-const TIER_PROGRESS_SCALE = 1.5; // bar's full width = 1.5x benchmark
+// The tier-progress bar's full width represents this many correct answers
+// at minimum, even for low-benchmark categories, so there's always visible
+// room to grow past Aura. Scales up further for higher benchmarks.
+const TIER_PROGRESS_MIN_SCALE = 50;
+const TIER_PROGRESS_SCALE_MULTIPLIER = 1.5;
 
 function getRank(correct, benchmark) {
   const ratio = benchmark > 0 ? correct / benchmark : 0;
@@ -244,7 +304,20 @@ const denomMaxInput = document.getElementById("denom-max");
 const denomExcludeInput = document.getElementById("denom-exclude");
 const benchmarkInput = document.getElementById("benchmark-input");
 const bestLineEl = document.getElementById("best-line");
+const scoreLineEl = document.getElementById("score-line");
 const tierFillEl = document.getElementById("tier-fill");
+const tierTicks = {
+  newb: document.getElementById("tick-newb"),
+  mid: document.getElementById("tick-mid"),
+  sigma: document.getElementById("tick-sigma"),
+  aura: document.getElementById("tick-aura"),
+};
+const tierCaptions = {
+  newb: document.getElementById("cap-newb"),
+  mid: document.getElementById("cap-mid"),
+  sigma: document.getElementById("cap-sigma"),
+  aura: document.getElementById("cap-aura"),
+};
 const thNewbEl = document.getElementById("th-newb");
 const thMidEl = document.getElementById("th-mid");
 const thSigmaEl = document.getElementById("th-sigma");
@@ -268,6 +341,7 @@ const resultCorrectEl = document.getElementById("result-correct");
 const resultMissedEl = document.getElementById("result-missed");
 const resultHelpedEl = document.getElementById("result-helped");
 const resultBestEl = document.getElementById("result-best");
+const resultScoreEl = document.getElementById("result-score");
 const rankBadgeEl = document.getElementById("rank-badge");
 const newBestBannerEl = document.getElementById("new-best-banner");
 
@@ -319,18 +393,28 @@ function updateStartScreenStats() {
     ? `Personal best: ${best} correct`
     : "No runs yet — set the pace!";
 
+  const score = loadScores()[cat];
+  scoreLineEl.textContent = score != null ? `Overall Score: ${score.toFixed(1)}` : "";
+
   updateTierProgress(best);
 }
 
 function updateTierProgress(best) {
   const benchmark = Number(benchmarkInput.value) || DEFAULT_BENCHMARKS[categorySelect.value];
+  const thresholds = { newb: benchmark * 0.5, mid: benchmark * 0.75, sigma: benchmark * 1.0, aura: benchmark * 1.3 };
 
-  thNewbEl.textContent = Math.ceil(benchmark * 0.5);
-  thMidEl.textContent = Math.ceil(benchmark * 0.75);
-  thSigmaEl.textContent = Math.ceil(benchmark * 1.0);
-  thAuraEl.textContent = Math.ceil(benchmark * 1.3);
+  const scaleMax = Math.max(benchmark * TIER_PROGRESS_SCALE_MULTIPLIER, TIER_PROGRESS_MIN_SCALE);
 
-  const scaleMax = benchmark * TIER_PROGRESS_SCALE;
+  for (const tier of Object.keys(thresholds)) {
+    const pct = Math.min(100, (thresholds[tier] / scaleMax) * 100);
+    tierTicks[tier].style.left = `${pct}%`;
+    tierCaptions[tier].style.left = `${pct}%`;
+  }
+  thNewbEl.textContent = Math.ceil(thresholds.newb);
+  thMidEl.textContent = Math.ceil(thresholds.mid);
+  thSigmaEl.textContent = Math.ceil(thresholds.sigma);
+  thAuraEl.textContent = Math.ceil(thresholds.aura);
+
   const fillPct = scaleMax > 0 ? Math.min(100, (best / scaleMax) * 100) : 0;
   tierFillEl.style.width = `${fillPct}%`;
 
@@ -359,9 +443,26 @@ function renderHistory() {
     const row = document.createElement("div");
     row.className = "history-row";
 
+    const top = document.createElement("div");
+    top.className = "history-row-top";
+
     const date = document.createElement("span");
     date.className = "history-date";
-    date.textContent = entry.date;
+    date.textContent = `${entry.date} · ${entry.minutes}m`;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "history-delete";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "✕";
+    deleteBtn.addEventListener("click", () => {
+      deleteHistoryEntry(entry.id);
+      renderHistory();
+    });
+
+    top.append(date, deleteBtn);
+
+    const bottom = document.createElement("div");
+    bottom.className = "history-row-bottom";
 
     const cat = document.createElement("span");
     cat.className = "history-cat";
@@ -375,7 +476,8 @@ function renderHistory() {
     rank.className = "history-rank";
     rank.textContent = rankInfo ? rankInfo.emoji : "·";
 
-    row.append(date, cat, score, rank);
+    bottom.append(cat, score, rank);
+    row.append(top, bottom);
     historyListEl.appendChild(row);
   }
 }
@@ -564,6 +666,15 @@ function finishQuiz() {
   if (isNewBest || rank?.tier === "sigma" || rank?.tier === "aura") {
     launchConfetti(rank?.tier === "aura" ? 90 : 60);
   }
+
+  const sessionScore = computeSessionScore({
+    correct: correctCount,
+    missed: missedCount,
+    helped: helpedCount,
+    minutes,
+  });
+  const overallScore = updateOverallScore(category, sessionScore);
+  resultScoreEl.textContent = overallScore.toFixed(1);
 
   logHistoryEntry({
     date: dateString(new Date()),
