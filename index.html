@@ -66,12 +66,29 @@
       </div>
 
       <label class="field">
-        <span>Benchmark (Platinum target)</span>
+        <span>Benchmark (Sigma target)</span>
         <input type="number" id="benchmark-input" min="1" max="200" />
       </label>
       <p class="best-line" id="best-line"></p>
 
+      <div class="tier-progress">
+        <div class="tier-track">
+          <div class="tier-fill" id="tier-fill"></div>
+          <div class="tier-tick" style="left: 33.3%">🌱</div>
+          <div class="tier-tick" style="left: 50%">😐</div>
+          <div class="tier-tick" style="left: 66.7%">🗿</div>
+          <div class="tier-tick" style="left: 86.7%">✨</div>
+        </div>
+        <div class="tier-caption">
+          <span class="tier-caption-item" style="left: 33.3%"><span id="th-newb"></span></span>
+          <span class="tier-caption-item" style="left: 50%"><span id="th-mid"></span></span>
+          <span class="tier-caption-item" style="left: 66.7%"><span id="th-sigma"></span></span>
+          <span class="tier-caption-item" style="left: 86.7%"><span id="th-aura"></span></span>
+        </div>
+      </div>
+
       <button id="start-btn" class="btn">Start</button>
+      <button id="history-btn" class="ghost-btn" type="button">📅 History</button>
     </section>
 
     <!-- Quiz screen -->
@@ -123,6 +140,14 @@
         </div>
       </div>
       <button id="retry-btn" class="btn">Play Again</button>
+    </section>
+
+    <!-- History screen -->
+    <section id="history-screen" class="screen hidden">
+      <h1>History</h1>
+      <div id="day-streak" class="day-streak"></div>
+      <div id="history-list" class="history-list"></div>
+      <button id="history-back-btn" class="btn">Back</button>
     </section>
   </main>
 

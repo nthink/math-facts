@@ -3,17 +3,27 @@ let factorAValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let factorBValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let fractionDenoms = [5, 6, 8];
 
-// Gamification: personal bests and per-category benchmarks persist across
-// sessions in localStorage. Benchmark = the "Platinum" target; rank tiers
-// scale off it so every category can have a difficulty-appropriate goal.
+// Gamification: personal bests, per-category benchmarks, and session
+// history persist across sessions in localStorage. Benchmark = the "Sigma"
+// target; rank tiers scale off it so every category can have a
+// difficulty-appropriate goal.
 const BENCHMARKS_KEY = "mathFacts.benchmarks";
 const BESTS_KEY = "mathFacts.bests";
+const HISTORY_KEY = "mathFacts.history";
+const MAX_HISTORY = 200;
 const DEFAULT_BENCHMARKS = {
   multiplication: 30,
   division: 25,
   fractionToDecimal: 15,
   decimalToFraction: 15,
   mixed: 20,
+};
+const CATEGORY_LABELS = {
+  multiplication: "Multiplication",
+  division: "Division",
+  fractionToDecimal: "Fraction → Decimal",
+  decimalToFraction: "Decimal → Fraction",
+  mixed: "Mixed",
 };
 
 function loadBenchmarks() {
@@ -49,12 +59,55 @@ function bestKey(cat, minutes) {
   return `${cat}:${minutes}`;
 }
 
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function logHistoryEntry(entry) {
+  const history = loadHistory();
+  history.push(entry);
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function dateString(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Consecutive calendar days with at least one logged session, counting
+// backward from today. Still "alive" if today has no session yet but
+// yesterday did; broken if neither does.
+function computeDayStreak(history) {
+  const days = new Set(history.map((h) => h.date));
+  const cursor = new Date();
+  if (!days.has(dateString(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!days.has(dateString(cursor))) return 0;
+  }
+  let streak = 0;
+  while (days.has(dateString(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+// Ratios are fixed fractions of the benchmark, so tick positions on the
+// tier-progress bar (see updateTierProgress) can be hardcoded percentages.
 const RANK_TIERS = [
-  { tier: "platinum", label: "Platinum", emoji: "🏆", ratio: 1.3 },
-  { tier: "gold", label: "Gold", emoji: "🥇", ratio: 1.0 },
-  { tier: "silver", label: "Silver", emoji: "🥈", ratio: 0.75 },
-  { tier: "bronze", label: "Bronze", emoji: "🥉", ratio: 0.5 },
+  { tier: "aura", label: "Aura", emoji: "✨", ratio: 1.3 },
+  { tier: "sigma", label: "Sigma", emoji: "🗿", ratio: 1.0 },
+  { tier: "mid", label: "Mid", emoji: "😐", ratio: 0.75 },
+  { tier: "newb", label: "Newb", emoji: "🌱", ratio: 0.5 },
 ];
+const TIER_PROGRESS_SCALE = 1.5; // bar's full width = 1.5x benchmark
 
 function getRank(correct, benchmark) {
   const ratio = benchmark > 0 ? correct / benchmark : 0;
@@ -174,6 +227,9 @@ function launchConfetti(count) {
 const startScreen = document.getElementById("start-screen");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
+const historyScreen = document.getElementById("history-screen");
+const dayStreakEl = document.getElementById("day-streak");
+const historyListEl = document.getElementById("history-list");
 
 const categorySelect = document.getElementById("category");
 const timeLimitSelect = document.getElementById("time-limit");
@@ -188,8 +244,15 @@ const denomMaxInput = document.getElementById("denom-max");
 const denomExcludeInput = document.getElementById("denom-exclude");
 const benchmarkInput = document.getElementById("benchmark-input");
 const bestLineEl = document.getElementById("best-line");
+const tierFillEl = document.getElementById("tier-fill");
+const thNewbEl = document.getElementById("th-newb");
+const thMidEl = document.getElementById("th-mid");
+const thSigmaEl = document.getElementById("th-sigma");
+const thAuraEl = document.getElementById("th-aura");
 const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
+const historyBtn = document.getElementById("history-btn");
+const historyBackBtn = document.getElementById("history-back-btn");
 
 const timerEl = document.getElementById("timer");
 const correctCountEl = document.getElementById("correct-count");
@@ -228,7 +291,7 @@ function formatCountdown(ms) {
 }
 
 function showScreen(screen) {
-  for (const s of [startScreen, quizScreen, resultsScreen]) {
+  for (const s of [startScreen, quizScreen, resultsScreen, historyScreen]) {
     s.classList.toggle("hidden", s !== screen);
   }
 }
@@ -251,10 +314,70 @@ function updateStartScreenStats() {
 
   benchmarkInput.value = loadBenchmarks()[cat];
 
-  const best = loadBests()[bestKey(cat, minutes)];
+  const best = loadBests()[bestKey(cat, minutes)] || 0;
   bestLineEl.textContent = best
     ? `Personal best: ${best} correct`
     : "No runs yet — set the pace!";
+
+  updateTierProgress(best);
+}
+
+function updateTierProgress(best) {
+  const benchmark = Number(benchmarkInput.value) || DEFAULT_BENCHMARKS[categorySelect.value];
+
+  thNewbEl.textContent = Math.ceil(benchmark * 0.5);
+  thMidEl.textContent = Math.ceil(benchmark * 0.75);
+  thSigmaEl.textContent = Math.ceil(benchmark * 1.0);
+  thAuraEl.textContent = Math.ceil(benchmark * 1.3);
+
+  const scaleMax = benchmark * TIER_PROGRESS_SCALE;
+  const fillPct = scaleMax > 0 ? Math.min(100, (best / scaleMax) * 100) : 0;
+  tierFillEl.style.width = `${fillPct}%`;
+
+  const rank = getRank(best, benchmark);
+  tierFillEl.style.background = rank ? `var(--${rank.tier})` : "var(--muted)";
+}
+
+function renderHistory() {
+  const history = loadHistory();
+  const streak = computeDayStreak(history);
+  dayStreakEl.textContent =
+    streak > 0 ? `🔥 ${streak} day streak` : "No active streak — play today to start one!";
+
+  historyListEl.innerHTML = "";
+  const recent = history.slice().reverse().slice(0, 20);
+  if (recent.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty";
+    empty.textContent = "No sessions yet.";
+    historyListEl.appendChild(empty);
+    return;
+  }
+
+  for (const entry of recent) {
+    const rankInfo = RANK_TIERS.find((r) => r.tier === entry.rank);
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const date = document.createElement("span");
+    date.className = "history-date";
+    date.textContent = entry.date;
+
+    const cat = document.createElement("span");
+    cat.className = "history-cat";
+    cat.textContent = CATEGORY_LABELS[entry.category] || entry.category;
+
+    const score = document.createElement("span");
+    score.className = "history-score";
+    score.textContent = String(entry.correct);
+
+    const rank = document.createElement("span");
+    rank.className = "history-rank";
+    rank.textContent = rankInfo ? rankInfo.emoji : "·";
+
+    row.append(date, cat, score, rank);
+    historyListEl.appendChild(row);
+  }
 }
 
 function updateStreakDisplay() {
@@ -438,17 +561,33 @@ function finishQuiz() {
 
   newBestBannerEl.classList.toggle("hidden", !isNewBest);
 
-  if (isNewBest || rank?.tier === "gold" || rank?.tier === "platinum") {
-    launchConfetti(rank?.tier === "platinum" ? 90 : 60);
+  if (isNewBest || rank?.tier === "sigma" || rank?.tier === "aura") {
+    launchConfetti(rank?.tier === "aura" ? 90 : 60);
   }
+
+  logHistoryEntry({
+    date: dateString(new Date()),
+    category,
+    minutes,
+    correct: correctCount,
+    rank: rank ? rank.tier : null,
+  });
 
   showScreen(resultsScreen);
 }
 
 startBtn.addEventListener("click", startQuiz);
-retryBtn.addEventListener("click", () => showScreen(startScreen));
+retryBtn.addEventListener("click", () => {
+  updateStartScreenStats();
+  showScreen(startScreen);
+});
 answerInput.addEventListener("input", handleInput);
 helpBtn.addEventListener("click", useHelp);
+historyBtn.addEventListener("click", () => {
+  renderHistory();
+  showScreen(historyScreen);
+});
+historyBackBtn.addEventListener("click", () => showScreen(startScreen));
 categorySelect.addEventListener("change", () => {
   updateRangeFieldVisibility();
   updateStartScreenStats();
@@ -458,6 +597,7 @@ benchmarkInput.addEventListener("change", () => {
   const value = Math.max(1, Number(benchmarkInput.value) || DEFAULT_BENCHMARKS[categorySelect.value]);
   benchmarkInput.value = value;
   saveBenchmark(categorySelect.value, value);
+  updateStartScreenStats();
 });
 updateRangeFieldVisibility();
 updateStartScreenStats();
