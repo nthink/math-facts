@@ -3,6 +3,67 @@ let factorAValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let factorBValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let fractionDenoms = [5, 6, 8];
 
+// Gamification: personal bests and per-category benchmarks persist across
+// sessions in localStorage. Benchmark = the "Platinum" target; rank tiers
+// scale off it so every category can have a difficulty-appropriate goal.
+const BENCHMARKS_KEY = "mathFacts.benchmarks";
+const BESTS_KEY = "mathFacts.bests";
+const DEFAULT_BENCHMARKS = {
+  multiplication: 30,
+  division: 25,
+  fractionToDecimal: 15,
+  decimalToFraction: 15,
+  mixed: 20,
+};
+
+function loadBenchmarks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BENCHMARKS_KEY));
+    return { ...DEFAULT_BENCHMARKS, ...raw };
+  } catch {
+    return { ...DEFAULT_BENCHMARKS };
+  }
+}
+
+function saveBenchmark(cat, value) {
+  const benchmarks = loadBenchmarks();
+  benchmarks[cat] = value;
+  localStorage.setItem(BENCHMARKS_KEY, JSON.stringify(benchmarks));
+}
+
+function loadBests() {
+  try {
+    return JSON.parse(localStorage.getItem(BESTS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveBest(key, value) {
+  const bests = loadBests();
+  bests[key] = value;
+  localStorage.setItem(BESTS_KEY, JSON.stringify(bests));
+}
+
+function bestKey(cat, minutes) {
+  return `${cat}:${minutes}`;
+}
+
+const RANK_TIERS = [
+  { tier: "platinum", label: "Platinum", emoji: "🏆", ratio: 1.3 },
+  { tier: "gold", label: "Gold", emoji: "🥇", ratio: 1.0 },
+  { tier: "silver", label: "Silver", emoji: "🥈", ratio: 0.75 },
+  { tier: "bronze", label: "Bronze", emoji: "🥉", ratio: 0.5 },
+];
+
+function getRank(correct, benchmark) {
+  const ratio = benchmark > 0 ? correct / benchmark : 0;
+  for (const rank of RANK_TIERS) {
+    if (ratio >= rank.ratio) return rank;
+  }
+  return null;
+}
+
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
@@ -93,6 +154,23 @@ function generateProblem(category) {
   return problemTypes[type]();
 }
 
+const CONFETTI_COLORS = ["#5b8cff", "#3ddc84", "#f0b429", "#ff5c5c", "#c084fc"];
+
+function launchConfetti(count) {
+  const layer = document.getElementById("confetti-layer");
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.backgroundColor = randomFrom(CONFETTI_COLORS);
+    piece.style.animationDuration = `${1.6 + Math.random() * 1.2}s`;
+    piece.style.animationDelay = `${Math.random() * 0.4}s`;
+    piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+    piece.addEventListener("animationend", () => piece.remove());
+    layer.appendChild(piece);
+  }
+}
+
 const startScreen = document.getElementById("start-screen");
 const quizScreen = document.getElementById("quiz-screen");
 const resultsScreen = document.getElementById("results-screen");
@@ -108,11 +186,15 @@ const fractionRangeField = document.getElementById("fraction-range-field");
 const denomMinInput = document.getElementById("denom-min");
 const denomMaxInput = document.getElementById("denom-max");
 const denomExcludeInput = document.getElementById("denom-exclude");
+const benchmarkInput = document.getElementById("benchmark-input");
+const bestLineEl = document.getElementById("best-line");
 const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
 
 const timerEl = document.getElementById("timer");
 const correctCountEl = document.getElementById("correct-count");
+const streakBadgeEl = document.getElementById("streak-badge");
+const paceEl = document.getElementById("pace-indicator");
 const problemEl = document.getElementById("problem");
 const hintEl = document.getElementById("hint");
 const answerInput = document.getElementById("answer-input");
@@ -122,11 +204,16 @@ const helpBtn = document.getElementById("help-btn");
 const resultCorrectEl = document.getElementById("result-correct");
 const resultMissedEl = document.getElementById("result-missed");
 const resultHelpedEl = document.getElementById("result-helped");
+const resultBestEl = document.getElementById("result-best");
+const rankBadgeEl = document.getElementById("rank-badge");
+const newBestBannerEl = document.getElementById("new-best-banner");
 
 let category = "multiplication";
 let currentProblem = null;
 let correctCount = 0;
 let missedCount = 0;
+let streak = 0;
+let totalDurationMs = 0;
 let helpedCount = 0;
 let quizActive = false;
 let inputLocked = false;
@@ -156,6 +243,29 @@ function updateRangeFieldVisibility() {
     "hidden",
     selected !== "fractionToDecimal" && selected !== "decimalToFraction" && selected !== "mixed"
   );
+}
+
+function updateStartScreenStats() {
+  const cat = categorySelect.value;
+  const minutes = Number(timeLimitSelect.value);
+
+  benchmarkInput.value = loadBenchmarks()[cat];
+
+  const best = loadBests()[bestKey(cat, minutes)];
+  bestLineEl.textContent = best
+    ? `Personal best: ${best} correct`
+    : "No runs yet — set the pace!";
+}
+
+function updateStreakDisplay() {
+  if (streak < 3) {
+    streakBadgeEl.className = "streak-badge hidden";
+    streakBadgeEl.textContent = "";
+    return;
+  }
+  const tier = streak >= 15 ? "streak-blaze" : streak >= 8 ? "streak-hot" : "streak-warm";
+  streakBadgeEl.className = `streak-badge ${tier}`;
+  streakBadgeEl.textContent = `🔥 ${streak}`;
 }
 
 function startQuiz() {
@@ -191,23 +301,35 @@ function startQuiz() {
 
   category = categorySelect.value;
   const minutes = Number(timeLimitSelect.value);
+  const newBenchmark = Math.max(1, Number(benchmarkInput.value) || DEFAULT_BENCHMARKS[category]);
+  saveBenchmark(category, newBenchmark);
+
   correctCount = 0;
   missedCount = 0;
   helpedCount = 0;
+  streak = 0;
   quizActive = true;
   inputLocked = false;
 
   correctCountEl.textContent = "0";
+  updateStreakDisplay();
+  paceEl.textContent = "";
   showScreen(quizScreen);
   nextProblem();
 
-  deadline = performance.now() + minutes * 60000;
-  timerEl.textContent = formatCountdown(minutes * 60000);
+  totalDurationMs = minutes * 60000;
+  deadline = performance.now() + totalDurationMs;
+  timerEl.textContent = formatCountdown(totalDurationMs);
   timerHandle = setInterval(tick, 100);
 }
 
 function tick() {
   const remaining = deadline - performance.now();
+  const elapsed = totalDurationMs - remaining;
+  if (elapsed > 4000 && correctCount > 0) {
+    const projected = Math.round((correctCount / elapsed) * totalDurationMs);
+    paceEl.textContent = `On pace for ${projected}`;
+  }
   if (remaining <= 0) {
     timerEl.textContent = "0:00";
     finishQuiz();
@@ -248,6 +370,8 @@ function useHelp() {
   if (!quizActive || inputLocked) return;
   inputLocked = true;
   helpedCount += 1;
+  streak = 0;
+  updateStreakDisplay();
   answerInput.value = currentProblem.answer;
   answerInput.className = "helped";
   answerInput.disabled = true;
@@ -265,6 +389,8 @@ function handleInput() {
   if (isCorrectAnswer(trimmed, currentProblem.answer)) {
     correctCount += 1;
     correctCountEl.textContent = String(correctCount);
+    streak = currentProblem.missed ? 0 : streak + 1;
+    updateStreakDisplay();
     answerInput.classList.remove("incorrect");
     answerInput.classList.add("correct");
     setTimeout(() => {
@@ -277,6 +403,8 @@ function handleInput() {
     if (!currentProblem.missed) {
       currentProblem.missed = true;
       missedCount += 1;
+      streak = 0;
+      updateStreakDisplay();
     }
     answerInput.classList.add("incorrect");
   } else {
@@ -291,6 +419,29 @@ function finishQuiz() {
   resultCorrectEl.textContent = String(correctCount);
   resultMissedEl.textContent = String(missedCount);
   resultHelpedEl.textContent = String(helpedCount);
+
+  const minutes = Number(timeLimitSelect.value);
+  const key = bestKey(category, minutes);
+  const previousBest = loadBests()[key] || 0;
+  const isNewBest = correctCount > previousBest;
+  if (isNewBest) saveBest(key, correctCount);
+  resultBestEl.textContent = String(Math.max(correctCount, previousBest));
+
+  const benchmark = loadBenchmarks()[category] || DEFAULT_BENCHMARKS[category];
+  const rank = getRank(correctCount, benchmark);
+  if (rank) {
+    rankBadgeEl.textContent = `${rank.emoji} ${rank.label}`;
+    rankBadgeEl.className = `rank-badge ${rank.tier}`;
+  } else {
+    rankBadgeEl.className = "rank-badge hidden";
+  }
+
+  newBestBannerEl.classList.toggle("hidden", !isNewBest);
+
+  if (isNewBest || rank?.tier === "gold" || rank?.tier === "platinum") {
+    launchConfetti(rank?.tier === "platinum" ? 90 : 60);
+  }
+
   showScreen(resultsScreen);
 }
 
@@ -298,5 +449,15 @@ startBtn.addEventListener("click", startQuiz);
 retryBtn.addEventListener("click", () => showScreen(startScreen));
 answerInput.addEventListener("input", handleInput);
 helpBtn.addEventListener("click", useHelp);
-categorySelect.addEventListener("change", updateRangeFieldVisibility);
+categorySelect.addEventListener("change", () => {
+  updateRangeFieldVisibility();
+  updateStartScreenStats();
+});
+timeLimitSelect.addEventListener("change", updateStartScreenStats);
+benchmarkInput.addEventListener("change", () => {
+  const value = Math.max(1, Number(benchmarkInput.value) || DEFAULT_BENCHMARKS[categorySelect.value]);
+  benchmarkInput.value = value;
+  saveBenchmark(categorySelect.value, value);
+});
 updateRangeFieldVisibility();
+updateStartScreenStats();

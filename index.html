@@ -65,14 +65,24 @@
         <input type="text" id="denom-exclude" value="7" placeholder="exclude, e.g. 7" />
       </div>
 
+      <label class="field">
+        <span>Benchmark (Platinum target)</span>
+        <input type="number" id="benchmark-input" min="1" max="200" />
+      </label>
+      <p class="best-line" id="best-line"></p>
+
       <button id="start-btn" class="btn">Start</button>
     </section>
 
     <!-- Quiz screen -->
     <section id="quiz-screen" class="screen hidden">
-      <div class="hud">
-        <span id="timer" class="timer">2:00</span>
-        <span class="correct-label">Correct: <span id="correct-count">0</span></span>
+      <div class="hud-wrap">
+        <div class="hud">
+          <span id="timer" class="timer">2:00</span>
+          <span id="streak-badge" class="streak-badge hidden"></span>
+          <span class="correct-label">Correct: <span id="correct-count">0</span></span>
+        </div>
+        <div id="pace-indicator" class="pace-indicator"></div>
       </div>
 
       <div class="problem-card">
@@ -92,6 +102,8 @@
     <!-- Results screen -->
     <section id="results-screen" class="screen hidden">
       <h1>Time's up!</h1>
+      <div id="rank-badge" class="rank-badge hidden"></div>
+      <div id="new-best-banner" class="new-best-banner hidden">New Best!</div>
       <div class="results">
         <div class="result-row">
           <span class="result-label">Correct</span>
@@ -105,10 +117,16 @@
           <span class="result-label">Helped</span>
           <span id="result-helped" class="result-value"></span>
         </div>
+        <div class="result-row">
+          <span class="result-label">Best</span>
+          <span id="result-best" class="result-value"></span>
+        </div>
       </div>
       <button id="retry-btn" class="btn">Play Again</button>
     </section>
   </main>
+
+  <div id="confetti-layer" class="confetti-layer"></div>
 
   <script src="app.js"></script>
 </body>
