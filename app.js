@@ -1,14 +1,18 @@
 // Populated from the start screen's range/exclude inputs in startQuiz().
-let multMin = 3;
-let multMax = 12;
+let factorAValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+let factorBValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let fractionDenoms = [5, 6, 8];
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function randomFrom(values) {
+  return values[randInt(0, values.length - 1)];
+}
+
 function randomFraction() {
-  const denom = fractionDenoms[randInt(0, fractionDenoms.length - 1)];
+  const denom = randomFrom(fractionDenoms);
   const numer = randInt(1, denom - 1);
   return { numer, denom };
 }
@@ -40,9 +44,22 @@ function fractionToDecimalString(numer, denom) {
 // exact string the user must type; comparison is plain string equality.
 const problemTypes = {
   multiplication() {
-    const a = randInt(multMin, multMax);
-    const b = randInt(multMin, multMax);
+    const a = randomFrom(factorAValues);
+    const b = randomFrom(factorBValues);
     return { prompt: `${a} × ${b}`, answer: String(a * b), hint: "" };
+  },
+  division() {
+    // "First number" plays the multiplier in multiplication and the divisor
+    // here, so limiting it the same way (e.g. to 1) practices the matching
+    // fact family in both categories.
+    const divisor = randomFrom(factorAValues);
+    const quotient = randomFrom(factorBValues);
+    const dividend = divisor * quotient;
+    return {
+      prompt: `${dividend} ÷ ${divisor}`,
+      answer: String(quotient),
+      hint: "",
+    };
   },
   fractionToDecimal() {
     const { numer, denom } = randomFraction();
@@ -64,9 +81,10 @@ const problemTypes = {
 
 const categoryTypes = {
   multiplication: ["multiplication"],
+  division: ["division"],
   fractionToDecimal: ["fractionToDecimal"],
   decimalToFraction: ["decimalToFraction"],
-  mixed: ["multiplication", "fractionToDecimal", "decimalToFraction"],
+  mixed: ["multiplication", "division", "fractionToDecimal", "decimalToFraction"],
 };
 
 function generateProblem(category) {
@@ -82,8 +100,10 @@ const resultsScreen = document.getElementById("results-screen");
 const categorySelect = document.getElementById("category");
 const timeLimitSelect = document.getElementById("time-limit");
 const multRangeField = document.getElementById("mult-range-field");
-const multMinInput = document.getElementById("mult-min");
-const multMaxInput = document.getElementById("mult-max");
+const factorAMinInput = document.getElementById("factor-a-min");
+const factorAMaxInput = document.getElementById("factor-a-max");
+const factorBMinInput = document.getElementById("factor-b-min");
+const factorBMaxInput = document.getElementById("factor-b-max");
 const fractionRangeField = document.getElementById("fraction-range-field");
 const denomMinInput = document.getElementById("denom-min");
 const denomMaxInput = document.getElementById("denom-max");
@@ -97,14 +117,19 @@ const problemEl = document.getElementById("problem");
 const hintEl = document.getElementById("hint");
 const answerInput = document.getElementById("answer-input");
 
+const helpBtn = document.getElementById("help-btn");
+
 const resultCorrectEl = document.getElementById("result-correct");
 const resultMissedEl = document.getElementById("result-missed");
+const resultHelpedEl = document.getElementById("result-helped");
 
 let category = "multiplication";
 let currentProblem = null;
 let correctCount = 0;
 let missedCount = 0;
+let helpedCount = 0;
 let quizActive = false;
+let inputLocked = false;
 let deadline = 0;
 let timerHandle = null;
 
@@ -125,7 +150,7 @@ function updateRangeFieldVisibility() {
   const selected = categorySelect.value;
   multRangeField.classList.toggle(
     "hidden",
-    selected !== "multiplication" && selected !== "mixed"
+    selected !== "multiplication" && selected !== "division" && selected !== "mixed"
   );
   fractionRangeField.classList.toggle(
     "hidden",
@@ -134,15 +159,21 @@ function updateRangeFieldVisibility() {
 }
 
 function startQuiz() {
-  const newMultMin = Number(multMinInput.value);
-  const newMultMax = Number(multMaxInput.value);
+  const newFactorAMin = Number(factorAMinInput.value);
+  const newFactorAMax = Number(factorAMaxInput.value);
+  const newFactorBMin = Number(factorBMinInput.value);
+  const newFactorBMax = Number(factorBMaxInput.value);
   const newDenomMin = Number(denomMinInput.value);
   const newDenomMax = Number(denomMaxInput.value);
   const exclude = parseExcludeList(denomExcludeInput.value);
   const newFractionDenoms = buildRange(newDenomMin, newDenomMax, exclude);
 
-  if (!newMultMin || !newMultMax || newMultMin > newMultMax) {
-    alert("Enter a valid multiplication range (min at or below max).");
+  if (!newFactorAMin || !newFactorAMax || newFactorAMin > newFactorAMax) {
+    alert("Enter a valid range for the first number (min at or below max).");
+    return;
+  }
+  if (!newFactorBMin || !newFactorBMax || newFactorBMin > newFactorBMax) {
+    alert("Enter a valid range for the second number (min at or below max).");
     return;
   }
   if (!newDenomMin || !newDenomMax || newDenomMin > newDenomMax) {
@@ -154,15 +185,17 @@ function startQuiz() {
     return;
   }
 
-  multMin = newMultMin;
-  multMax = newMultMax;
+  factorAValues = buildRange(newFactorAMin, newFactorAMax, new Set());
+  factorBValues = buildRange(newFactorBMin, newFactorBMax, new Set());
   fractionDenoms = newFractionDenoms;
 
   category = categorySelect.value;
   const minutes = Number(timeLimitSelect.value);
   correctCount = 0;
   missedCount = 0;
+  helpedCount = 0;
   quizActive = true;
+  inputLocked = false;
 
   correctCountEl.textContent = "0";
   showScreen(quizScreen);
@@ -206,11 +239,27 @@ function nextProblem() {
   hintEl.textContent = currentProblem.hint;
   answerInput.value = "";
   answerInput.className = "";
+  answerInput.disabled = false;
+  helpBtn.disabled = false;
   answerInput.focus();
 }
 
+function useHelp() {
+  if (!quizActive || inputLocked) return;
+  inputLocked = true;
+  helpedCount += 1;
+  answerInput.value = currentProblem.answer;
+  answerInput.className = "helped";
+  answerInput.disabled = true;
+  helpBtn.disabled = true;
+  setTimeout(() => {
+    inputLocked = false;
+    if (quizActive) nextProblem();
+  }, 1000);
+}
+
 function handleInput() {
-  if (!quizActive) return;
+  if (!quizActive || inputLocked) return;
   const trimmed = answerInput.value.trim();
 
   if (isCorrectAnswer(trimmed, currentProblem.answer)) {
@@ -241,11 +290,13 @@ function finishQuiz() {
   answerInput.blur();
   resultCorrectEl.textContent = String(correctCount);
   resultMissedEl.textContent = String(missedCount);
+  resultHelpedEl.textContent = String(helpedCount);
   showScreen(resultsScreen);
 }
 
 startBtn.addEventListener("click", startQuiz);
 retryBtn.addEventListener("click", () => showScreen(startScreen));
 answerInput.addEventListener("input", handleInput);
+helpBtn.addEventListener("click", useHelp);
 categorySelect.addEventListener("change", updateRangeFieldVisibility);
 updateRangeFieldVisibility();

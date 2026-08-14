@@ -17,6 +17,7 @@
         <span>Category</span>
         <select id="category">
           <option value="multiplication" selected>Multiplication</option>
+          <option value="division">Division</option>
           <option value="fractionToDecimal">Fraction &rarr; Decimal</option>
           <option value="decimalToFraction">Decimal &rarr; Fraction</option>
           <option value="mixed">Mixed</option>
@@ -35,11 +36,22 @@
       </label>
 
       <div class="field" id="mult-range-field">
-        <span>Multiplication factors</span>
-        <div class="range-inputs">
-          <input type="number" id="mult-min" value="3" min="1" max="20" />
-          <span class="range-sep">to</span>
-          <input type="number" id="mult-max" value="12" min="1" max="20" />
+        <span>Multiplication / Division numbers</span>
+        <div class="subfield">
+          <span class="subfield-label">First number</span>
+          <div class="range-inputs">
+            <input type="number" id="factor-a-min" value="3" min="1" max="20" />
+            <span class="range-sep">to</span>
+            <input type="number" id="factor-a-max" value="12" min="1" max="20" />
+          </div>
+        </div>
+        <div class="subfield">
+          <span class="subfield-label">Second number</span>
+          <div class="range-inputs">
+            <input type="number" id="factor-b-min" value="3" min="1" max="20" />
+            <span class="range-sep">to</span>
+            <input type="number" id="factor-b-max" value="12" min="1" max="20" />
+          </div>
         </div>
       </div>
 
@@ -73,6 +85,7 @@
           placeholder="?"
         />
         <div id="hint" class="hint"></div>
+        <button id="help-btn" class="help-btn" type="button">Help</button>
       </div>
     </section>
 
@@ -87,6 +100,10 @@
         <div class="result-row">
           <span class="result-label">Missed</span>
           <span id="result-missed" class="result-value"></span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Helped</span>
+          <span id="result-helped" class="result-value"></span>
         </div>
       </div>
       <button id="retry-btn" class="btn">Play Again</button>
