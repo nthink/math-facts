@@ -3,15 +3,18 @@ let factorAValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let factorBValues = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 let fractionDenoms = [5, 6, 8];
 
-// Gamification: personal bests, per-category benchmarks, and session
-// history persist across sessions in localStorage. Benchmark = the "Sigma"
-// target; rank tiers scale off it so every category can have a
-// difficulty-appropriate goal.
+// Gamification: per-category benchmarks and session history persist in
+// localStorage. Benchmark = the "Sigma" target; rank tiers scale off it so
+// every category can have a difficulty-appropriate goal. Personal bests and
+// the Overall Score are NOT stored separately — they're derived fresh from
+// the history log every time, so deleting a history entry automatically
+// removes its effect everywhere, as if that session never happened.
 const BENCHMARKS_KEY = "mathFacts.benchmarks";
-const BESTS_KEY = "mathFacts.bests";
 const HISTORY_KEY = "mathFacts.history";
-const SCORES_KEY = "mathFacts.scores";
 const MAX_HISTORY = 200;
+// Stale keys from before bests/scores were derived from history; cleared on
+// load so no orphaned data lingers.
+const LEGACY_KEYS = ["mathFacts.bests", "mathFacts.scores"];
 const DEFAULT_BENCHMARKS = {
   multiplication: 30,
   division: 25,
@@ -42,39 +45,20 @@ function saveBenchmark(cat, value) {
   localStorage.setItem(BENCHMARKS_KEY, JSON.stringify(benchmarks));
 }
 
-function loadBests() {
-  try {
-    return JSON.parse(localStorage.getItem(BESTS_KEY)) || {};
-  } catch {
-    return {};
-  }
+// Personal best for a category+time-limit, read straight from history.
+function getBest(cat, minutes) {
+  const entries = loadHistory().filter((h) => h.category === cat && h.minutes === minutes);
+  if (entries.length === 0) return 0;
+  return Math.max(...entries.map((e) => e.correct));
 }
 
-function saveBest(key, value) {
-  const bests = loadBests();
-  bests[key] = value;
-  localStorage.setItem(BESTS_KEY, JSON.stringify(bests));
-}
-
-function bestKey(cat, minutes) {
-  return `${cat}:${minutes}`;
-}
-
-// Overall Score: a persistent per-category rating that blends speed and
-// accuracy, distinct from "personal best" (which is just a single high
-// score at one time limit). Each session's quality score folds into a
-// running average — one bad or lucky run barely moves it, but consistent
-// improvement over many sessions does. Because it's rate-based
-// (correct/minute), it's comparable across different time limits too.
+// Overall Score: a per-category rating that blends speed and accuracy,
+// distinct from "personal best" (a single high score at one time limit).
+// Each session's quality score folds into a running average, replayed in
+// order from the history log — one bad or lucky run barely moves it, but
+// consistent improvement over many sessions does. Rate-based
+// (correct/minute), so it stays comparable across different time limits.
 const SCORE_EMA_ALPHA = 0.3;
-
-function loadScores() {
-  try {
-    return JSON.parse(localStorage.getItem(SCORES_KEY)) || {};
-  } catch {
-    return {};
-  }
-}
 
 function computeSessionScore({ correct, missed, helped, minutes }) {
   const totalProblems = correct + helped;
@@ -85,15 +69,23 @@ function computeSessionScore({ correct, missed, helped, minutes }) {
   return speed * accuracy * cleanliness;
 }
 
-// Folds a session's score into the category's running average and
-// persists it. Returns the updated overall score.
-function updateOverallScore(cat, sessionScore) {
-  const scores = loadScores();
-  const previous = scores[cat];
-  const updated = previous == null ? sessionScore : SCORE_EMA_ALPHA * sessionScore + (1 - SCORE_EMA_ALPHA) * previous;
-  scores[cat] = updated;
-  localStorage.setItem(SCORES_KEY, JSON.stringify(scores));
-  return updated;
+// Replays every logged session for a category (in chronological order,
+// since history is stored in the order sessions were played) to fold a
+// fresh EMA. Deleting an entry naturally changes this on the next call.
+function getOverallScore(cat) {
+  const entries = loadHistory().filter((h) => h.category === cat);
+  if (entries.length === 0) return null;
+  let score = null;
+  for (const entry of entries) {
+    const sessionScore = computeSessionScore({
+      correct: entry.correct,
+      missed: entry.missed || 0,
+      helped: entry.helped || 0,
+      minutes: entry.minutes,
+    });
+    score = score == null ? sessionScore : SCORE_EMA_ALPHA * sessionScore + (1 - SCORE_EMA_ALPHA) * score;
+  }
+  return score;
 }
 
 function makeHistoryId() {
@@ -166,7 +158,7 @@ const RANK_TIERS = [
 // The tier-progress bar's full width represents this many correct answers
 // at minimum, even for low-benchmark categories, so there's always visible
 // room to grow past Aura. Scales up further for higher benchmarks.
-const TIER_PROGRESS_MIN_SCALE = 50;
+const TIER_PROGRESS_MIN_SCALE = 100;
 const TIER_PROGRESS_SCALE_MULTIPLIER = 1.5;
 
 function getRank(correct, benchmark) {
@@ -331,6 +323,8 @@ const timerEl = document.getElementById("timer");
 const correctCountEl = document.getElementById("correct-count");
 const streakBadgeEl = document.getElementById("streak-badge");
 const paceEl = document.getElementById("pace-indicator");
+const parkourPlatformsEl = document.getElementById("parkour-platforms");
+const parkourRunnerEl = document.getElementById("parkour-runner");
 const problemEl = document.getElementById("problem");
 const hintEl = document.getElementById("hint");
 const answerInput = document.getElementById("answer-input");
@@ -356,6 +350,8 @@ let quizActive = false;
 let inputLocked = false;
 let deadline = 0;
 let timerHandle = null;
+let parkourStep = 0;
+let parkourPositions = [];
 
 function formatCountdown(ms) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -388,12 +384,12 @@ function updateStartScreenStats() {
 
   benchmarkInput.value = loadBenchmarks()[cat];
 
-  const best = loadBests()[bestKey(cat, minutes)] || 0;
+  const best = getBest(cat, minutes);
   bestLineEl.textContent = best
     ? `Personal best: ${best} correct`
     : "No runs yet — set the pace!";
 
-  const score = loadScores()[cat];
+  const score = getOverallScore(cat);
   scoreLineEl.textContent = score != null ? `Overall Score: ${score.toFixed(1)}` : "";
 
   updateTierProgress(best);
@@ -493,6 +489,33 @@ function updateStreakDisplay() {
   streakBadgeEl.textContent = `🔥 ${streak}`;
 }
 
+// Measures each platform's center X (in px, relative to the parkour
+// container) so the runner can be positioned with `left`. Must run after
+// the quiz screen is visible — offsets are 0 while display:none.
+function layoutParkour() {
+  const platforms = parkourPlatformsEl.children;
+  parkourPositions = Array.from(platforms).map((p) => p.offsetLeft + p.offsetWidth / 2);
+}
+
+function moveRunnerTo(step, animate) {
+  parkourRunnerEl.style.transition = animate ? "" : "none";
+  parkourRunnerEl.style.left = `${parkourPositions[step]}px`;
+  if (!animate) parkourRunnerEl.offsetHeight; // force reflow so the next transition re-enables cleanly
+  parkourRunnerEl.style.transition = "";
+}
+
+function runnerHop() {
+  parkourRunnerEl.classList.remove("falling");
+  parkourRunnerEl.classList.add("hopping");
+  parkourRunnerEl.addEventListener("animationend", () => parkourRunnerEl.classList.remove("hopping"), { once: true });
+}
+
+function runnerFall() {
+  parkourRunnerEl.classList.remove("hopping");
+  parkourRunnerEl.classList.add("falling");
+  parkourRunnerEl.addEventListener("animationend", () => parkourRunnerEl.classList.remove("falling"), { once: true });
+}
+
 function startQuiz() {
   const newFactorAMin = Number(factorAMinInput.value);
   const newFactorAMax = Number(factorAMaxInput.value);
@@ -533,6 +556,7 @@ function startQuiz() {
   missedCount = 0;
   helpedCount = 0;
   streak = 0;
+  parkourStep = 0;
   quizActive = true;
   inputLocked = false;
 
@@ -540,6 +564,8 @@ function startQuiz() {
   updateStreakDisplay();
   paceEl.textContent = "";
   showScreen(quizScreen);
+  layoutParkour();
+  moveRunnerTo(parkourStep, false);
   nextProblem();
 
   totalDurationMs = minutes * 60000;
@@ -597,6 +623,7 @@ function useHelp() {
   helpedCount += 1;
   streak = 0;
   updateStreakDisplay();
+  runnerFall();
   answerInput.value = currentProblem.answer;
   answerInput.className = "helped";
   answerInput.disabled = true;
@@ -616,6 +643,9 @@ function handleInput() {
     correctCountEl.textContent = String(correctCount);
     streak = currentProblem.missed ? 0 : streak + 1;
     updateStreakDisplay();
+    parkourStep = (parkourStep + 1) % parkourPositions.length;
+    moveRunnerTo(parkourStep, true);
+    runnerHop();
     answerInput.classList.remove("incorrect");
     answerInput.classList.add("correct");
     setTimeout(() => {
@@ -630,6 +660,7 @@ function handleInput() {
       missedCount += 1;
       streak = 0;
       updateStreakDisplay();
+      runnerFall();
     }
     answerInput.classList.add("incorrect");
   } else {
@@ -646,10 +677,8 @@ function finishQuiz() {
   resultHelpedEl.textContent = String(helpedCount);
 
   const minutes = Number(timeLimitSelect.value);
-  const key = bestKey(category, minutes);
-  const previousBest = loadBests()[key] || 0;
+  const previousBest = getBest(category, minutes);
   const isNewBest = correctCount > previousBest;
-  if (isNewBest) saveBest(key, correctCount);
   resultBestEl.textContent = String(Math.max(correctCount, previousBest));
 
   const benchmark = loadBenchmarks()[category] || DEFAULT_BENCHMARKS[category];
@@ -667,22 +696,18 @@ function finishQuiz() {
     launchConfetti(rank?.tier === "aura" ? 90 : 60);
   }
 
-  const sessionScore = computeSessionScore({
-    correct: correctCount,
-    missed: missedCount,
-    helped: helpedCount,
-    minutes,
-  });
-  const overallScore = updateOverallScore(category, sessionScore);
-  resultScoreEl.textContent = overallScore.toFixed(1);
-
   logHistoryEntry({
     date: dateString(new Date()),
     category,
     minutes,
     correct: correctCount,
+    missed: missedCount,
+    helped: helpedCount,
     rank: rank ? rank.tier : null,
   });
+
+  const overallScore = getOverallScore(category);
+  resultScoreEl.textContent = overallScore != null ? overallScore.toFixed(1) : "0.0";
 
   showScreen(resultsScreen);
 }
@@ -698,7 +723,10 @@ historyBtn.addEventListener("click", () => {
   renderHistory();
   showScreen(historyScreen);
 });
-historyBackBtn.addEventListener("click", () => showScreen(startScreen));
+historyBackBtn.addEventListener("click", () => {
+  updateStartScreenStats();
+  showScreen(startScreen);
+});
 categorySelect.addEventListener("change", () => {
   updateRangeFieldVisibility();
   updateStartScreenStats();
@@ -710,5 +738,6 @@ benchmarkInput.addEventListener("change", () => {
   saveBenchmark(categorySelect.value, value);
   updateStartScreenStats();
 });
+for (const key of LEGACY_KEYS) localStorage.removeItem(key);
 updateRangeFieldVisibility();
 updateStartScreenStats();
