@@ -30,9 +30,75 @@ body {
   padding: 24px;
 }
 
+.page-layout {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
 .app {
   width: 100%;
   max-width: 420px;
+}
+
+.cumulative-bar-wrap {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .cumulative-bar-wrap.showing {
+    display: flex;
+  }
+}
+
+.cumulative-heading {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cumulative-level {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--sigma);
+}
+
+.cumulative-track {
+  position: relative;
+  width: 22px;
+  height: 380px;
+  background: #2c2f38;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cumulative-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0%;
+  background: linear-gradient(0deg, var(--accent) 0%, var(--sigma) 55%, var(--aura) 100%);
+  transition: height 0.4s ease;
+}
+
+.cumulative-tick {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.cumulative-total {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .screen {

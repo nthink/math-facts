@@ -149,15 +149,18 @@ function computeDayStreak(history) {
   return streak;
 }
 
+// `tier` keys are kept stable (not renamed to match the display labels)
+// since they're already saved on old history entries and used as CSS
+// classes/color variable names — only `label`/`emoji` are user-facing.
 const RANK_TIERS = [
-  { tier: "aura", label: "Aura", emoji: "✨", ratio: 1.3 },
-  { tier: "sigma", label: "Sigma", emoji: "🗿", ratio: 1.0 },
-  { tier: "mid", label: "Mid", emoji: "😐", ratio: 0.75 },
-  { tier: "newb", label: "Newb", emoji: "🌱", ratio: 0.5 },
+  { tier: "aura", label: "Expert", emoji: "✨", ratio: 1.3 },
+  { tier: "sigma", label: "Advanced", emoji: "🔥", ratio: 1.0 },
+  { tier: "mid", label: "Intermediate", emoji: "⚡", ratio: 0.75 },
+  { tier: "newb", label: "Beginner", emoji: "🌱", ratio: 0.5 },
 ];
 // The tier-progress bar's full width represents this many correct answers
 // at minimum, even for low-benchmark categories, so there's always visible
-// room to grow past Aura. Scales up further for higher benchmarks.
+// room to grow past Expert. Scales up further for higher benchmarks.
 const TIER_PROGRESS_MIN_SCALE = 100;
 const TIER_PROGRESS_SCALE_MULTIPLIER = 1.5;
 
@@ -283,6 +286,11 @@ const historyScreen = document.getElementById("history-screen");
 const dayStreakEl = document.getElementById("day-streak");
 const historyListEl = document.getElementById("history-list");
 
+const cumulativeBarWrapEl = document.getElementById("cumulative-bar-wrap");
+const cumulativeFillEl = document.getElementById("cumulative-fill");
+const cumulativeLevelEl = document.getElementById("cumulative-level");
+const cumulativeTotalEl = document.getElementById("cumulative-total");
+
 const categorySelect = document.getElementById("category");
 const timeLimitSelect = document.getElementById("time-limit");
 const multRangeField = document.getElementById("mult-range-field");
@@ -361,6 +369,7 @@ function showScreen(screen) {
   for (const s of [startScreen, quizScreen, resultsScreen, historyScreen]) {
     s.classList.toggle("hidden", s !== screen);
   }
+  cumulativeBarWrapEl.classList.toggle("showing", screen === startScreen);
 }
 
 function updateRangeFieldVisibility() {
@@ -390,6 +399,28 @@ function updateStartScreenStats() {
   scoreLineEl.textContent = score != null ? `Overall Score: ${score.toFixed(1)}` : "";
 
   updateTierProgress(best);
+  updateCumulativeBar();
+}
+
+// Lifetime total across every category, summing every correct answer ever
+// logged. Unlike the per-category Overall Score (an EMA that can drift up
+// or down), this only grows as more correct answers pile up — deleting a
+// history entry reduces it accordingly, same as everything else derived
+// from history.
+const CUMULATIVE_MAX = 10000;
+const CUMULATIVE_LEVELS = 10;
+
+function getCumulativeScore() {
+  return loadHistory().reduce((sum, h) => sum + (h.correct || 0), 0);
+}
+
+function updateCumulativeBar() {
+  const total = getCumulativeScore();
+  const pct = Math.min(100, (total / CUMULATIVE_MAX) * 100);
+  cumulativeFillEl.style.height = `${pct}%`;
+  cumulativeTotalEl.textContent = total.toLocaleString();
+  const level = Math.min(CUMULATIVE_LEVELS, Math.floor(total / (CUMULATIVE_MAX / CUMULATIVE_LEVELS)) + 1);
+  cumulativeLevelEl.textContent = `Lv ${level}`;
 }
 
 function updateTierProgress(best) {
@@ -716,3 +747,4 @@ for (const key of LEGACY_KEYS) localStorage.removeItem(key);
 lockInToggle.checked = loadLockIn();
 updateRangeFieldVisibility();
 updateStartScreenStats();
+showScreen(startScreen);

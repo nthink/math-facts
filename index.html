@@ -7,7 +7,26 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="app">
+  <div class="page-layout">
+    <div class="cumulative-bar-wrap" id="cumulative-bar-wrap">
+      <span class="cumulative-heading">Lifetime</span>
+      <span class="cumulative-level" id="cumulative-level">Lv 1</span>
+      <div class="cumulative-track">
+        <div class="cumulative-fill" id="cumulative-fill"></div>
+        <div class="cumulative-tick" style="bottom: 10%"></div>
+        <div class="cumulative-tick" style="bottom: 20%"></div>
+        <div class="cumulative-tick" style="bottom: 30%"></div>
+        <div class="cumulative-tick" style="bottom: 40%"></div>
+        <div class="cumulative-tick" style="bottom: 50%"></div>
+        <div class="cumulative-tick" style="bottom: 60%"></div>
+        <div class="cumulative-tick" style="bottom: 70%"></div>
+        <div class="cumulative-tick" style="bottom: 80%"></div>
+        <div class="cumulative-tick" style="bottom: 90%"></div>
+      </div>
+      <span class="cumulative-total" id="cumulative-total">0</span>
+    </div>
+
+    <main class="app">
     <!-- Start screen -->
     <section id="start-screen" class="screen">
       <h1>Math Facts</h1>
@@ -66,7 +85,7 @@
       </div>
 
       <label class="field">
-        <span>Benchmark (Sigma target)</span>
+        <span>Benchmark (Advanced target)</span>
         <input type="number" id="benchmark-input" min="1" max="200" />
       </label>
       <p class="best-line" id="best-line"></p>
@@ -76,8 +95,8 @@
         <div class="tier-track">
           <div class="tier-fill" id="tier-fill"></div>
           <div class="tier-tick" id="tick-newb">🌱</div>
-          <div class="tier-tick" id="tick-mid">😐</div>
-          <div class="tier-tick" id="tick-sigma">🗿</div>
+          <div class="tier-tick" id="tick-mid">⚡</div>
+          <div class="tier-tick" id="tick-sigma">🔥</div>
           <div class="tier-tick" id="tick-aura">✨</div>
         </div>
         <div class="tier-caption">
@@ -159,7 +178,8 @@
       <div id="history-list" class="history-list"></div>
       <button id="history-back-btn" class="btn">Back</button>
     </section>
-  </main>
+    </main>
+  </div>
 
   <div id="confetti-layer" class="confetti-layer"></div>
 
