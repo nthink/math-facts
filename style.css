@@ -187,6 +187,31 @@ select,
   font-variant-numeric: tabular-nums;
 }
 
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 260px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkbox-field input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.quiz-screen-lock-in .streak-badge,
+.quiz-screen-lock-in .pace-indicator {
+  display: none !important;
+}
+
 .btn {
   padding: 14px 32px;
   border-radius: 999px;
@@ -263,76 +288,6 @@ select,
 .streak-badge.streak-blaze {
   color: var(--bad);
   transform: scale(1.15);
-}
-
-.parkour {
-  position: relative;
-  width: 100%;
-  height: 88px;
-  border-radius: var(--radius);
-  background: linear-gradient(135deg, var(--accent) 0%, var(--sigma) 55%, var(--aura) 100%);
-  overflow: hidden;
-}
-
-.parkour-platforms {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.parkour-platform {
-  width: 34px;
-  height: 12px;
-  border-radius: 6px;
-  background: var(--good);
-}
-
-.parkour-platform:nth-child(2) { background: var(--help); }
-.parkour-platform:nth-child(3) { background: var(--bad); }
-.parkour-platform:nth-child(4) { background: var(--accent); }
-.parkour-platform:nth-child(5) { background: var(--sigma); }
-.parkour-platform-final { background: var(--aura); position: relative; }
-
-.parkour-star {
-  position: absolute;
-  top: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1rem;
-}
-
-.parkour-runner {
-  position: absolute;
-  bottom: 22px;
-  font-size: 1.8rem;
-  transform: translateX(-50%);
-  transition: left 0.3s ease;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
-}
-
-.parkour-runner.hopping {
-  animation: parkour-hop 0.3s ease;
-}
-
-.parkour-runner.falling {
-  animation: parkour-fall 0.6s ease;
-}
-
-@keyframes parkour-hop {
-  0% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-16px); }
-  100% { transform: translateX(-50%) translateY(0); }
-}
-
-@keyframes parkour-fall {
-  0% { transform: translateX(-50%) translateY(0) rotate(0deg); }
-  35% { transform: translateX(-50%) translateY(18px) rotate(85deg); }
-  70% { transform: translateX(-50%) translateY(18px) rotate(85deg); }
-  100% { transform: translateX(-50%) translateY(0) rotate(0deg); }
 }
 
 .problem-card {

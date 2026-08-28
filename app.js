@@ -318,13 +318,12 @@ const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
 const historyBtn = document.getElementById("history-btn");
 const historyBackBtn = document.getElementById("history-back-btn");
+const lockInToggle = document.getElementById("lock-in-toggle");
 
 const timerEl = document.getElementById("timer");
 const correctCountEl = document.getElementById("correct-count");
 const streakBadgeEl = document.getElementById("streak-badge");
 const paceEl = document.getElementById("pace-indicator");
-const parkourPlatformsEl = document.getElementById("parkour-platforms");
-const parkourRunnerEl = document.getElementById("parkour-runner");
 const problemEl = document.getElementById("problem");
 const hintEl = document.getElementById("hint");
 const answerInput = document.getElementById("answer-input");
@@ -350,8 +349,6 @@ let quizActive = false;
 let inputLocked = false;
 let deadline = 0;
 let timerHandle = null;
-let parkourStep = 0;
-let parkourPositions = [];
 
 function formatCountdown(ms) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -489,31 +486,14 @@ function updateStreakDisplay() {
   streakBadgeEl.textContent = `🔥 ${streak}`;
 }
 
-// Measures each platform's center X (in px, relative to the parkour
-// container) so the runner can be positioned with `left`. Must run after
-// the quiz screen is visible — offsets are 0 while display:none.
-function layoutParkour() {
-  const platforms = parkourPlatformsEl.children;
-  parkourPositions = Array.from(platforms).map((p) => p.offsetLeft + p.offsetWidth / 2);
+const LOCK_IN_KEY = "mathFacts.lockIn";
+
+function loadLockIn() {
+  return localStorage.getItem(LOCK_IN_KEY) === "true";
 }
 
-function moveRunnerTo(step, animate) {
-  parkourRunnerEl.style.transition = animate ? "" : "none";
-  parkourRunnerEl.style.left = `${parkourPositions[step]}px`;
-  if (!animate) parkourRunnerEl.offsetHeight; // force reflow so the next transition re-enables cleanly
-  parkourRunnerEl.style.transition = "";
-}
-
-function runnerHop() {
-  parkourRunnerEl.classList.remove("falling");
-  parkourRunnerEl.classList.add("hopping");
-  parkourRunnerEl.addEventListener("animationend", () => parkourRunnerEl.classList.remove("hopping"), { once: true });
-}
-
-function runnerFall() {
-  parkourRunnerEl.classList.remove("hopping");
-  parkourRunnerEl.classList.add("falling");
-  parkourRunnerEl.addEventListener("animationend", () => parkourRunnerEl.classList.remove("falling"), { once: true });
+function saveLockIn(value) {
+  localStorage.setItem(LOCK_IN_KEY, String(value));
 }
 
 function startQuiz() {
@@ -556,16 +536,14 @@ function startQuiz() {
   missedCount = 0;
   helpedCount = 0;
   streak = 0;
-  parkourStep = 0;
   quizActive = true;
   inputLocked = false;
 
   correctCountEl.textContent = "0";
   updateStreakDisplay();
   paceEl.textContent = "";
+  quizScreen.classList.toggle("quiz-screen-lock-in", lockInToggle.checked);
   showScreen(quizScreen);
-  layoutParkour();
-  moveRunnerTo(parkourStep, false);
   nextProblem();
 
   totalDurationMs = minutes * 60000;
@@ -623,7 +601,6 @@ function useHelp() {
   helpedCount += 1;
   streak = 0;
   updateStreakDisplay();
-  runnerFall();
   answerInput.value = currentProblem.answer;
   answerInput.className = "helped";
   answerInput.disabled = true;
@@ -643,9 +620,6 @@ function handleInput() {
     correctCountEl.textContent = String(correctCount);
     streak = currentProblem.missed ? 0 : streak + 1;
     updateStreakDisplay();
-    parkourStep = (parkourStep + 1) % parkourPositions.length;
-    moveRunnerTo(parkourStep, true);
-    runnerHop();
     answerInput.classList.remove("incorrect");
     answerInput.classList.add("correct");
     setTimeout(() => {
@@ -660,7 +634,6 @@ function handleInput() {
       missedCount += 1;
       streak = 0;
       updateStreakDisplay();
-      runnerFall();
     }
     answerInput.classList.add("incorrect");
   } else {
@@ -738,6 +711,8 @@ benchmarkInput.addEventListener("change", () => {
   saveBenchmark(categorySelect.value, value);
   updateStartScreenStats();
 });
+lockInToggle.addEventListener("change", () => saveLockIn(lockInToggle.checked));
 for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+lockInToggle.checked = loadLockIn();
 updateRangeFieldVisibility();
 updateStartScreenStats();
